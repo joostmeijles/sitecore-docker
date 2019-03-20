@@ -12,14 +12,16 @@ using Nuke.Common.Tooling;
 
 partial class Build : NukeBuild
 {
+    [Parameter("Docker image sitecore version")]
+    public readonly string XcSitecoreVersion = "9.0.3";
     // Docker image naming
     [Parameter("Docker image prefix for Sitecore XC")]
     readonly string XcImagePrefix = "sitecore-xc-";
 
-    [Parameter("Docker image version tag for Sitecore XC")]
-    readonly string XcVersion = "9.0.3-ltsc2019";
-
-    private string XcFullImageName(string name) => $"{RepoImagePrefix}{XcImagePrefix}{name}:{XcVersion}";
+    private string XcFullImageName(string name) => string.IsNullOrEmpty(BuildVersion) ? 
+    $"{RepoImagePrefix}/{XcImageName(name)}" : 
+    $"{RepoImagePrefix}/{XcImageName(name)}-{BuildVersion}";
+    private string XcImageName(string name) => $"{XcImagePrefix}{name}:{XcSitecoreVersion}";
 
     // Packages
     [Parameter("Sitecore Identity server package")]
@@ -87,13 +89,21 @@ partial class Build : NukeBuild
     [Parameter("Commerce database prefix")]    
     readonly string COMMERCE_DB_PREFIX = "SitecoreCommerce9";
 
+    public AbsolutePath XcLicenseFile = RootDirectory / "xc" / "license" / "license.xml";
+
     Target XcCommerce => _ => _
+        .Requires(() => File.Exists(Files / COMMERCE_SIF_PACKAGE))
+        .Requires(() => File.Exists(Files / COMMERCE_SDK_PACKAGE))
+        .Requires(() => File.Exists(Files / SITECORE_BIZFX_PACKAGE))
+        .Requires(() => File.Exists(Files / SITECORE_IDENTITY_PACKAGE))
+        .Requires(() => File.Exists(Files / COMMERCE_ENGINE_PACKAGE))
+        .Requires(() => File.Exists(Files / PLUMBER_FILE_NAME))
         .Executes(() =>
         {
             DockerBuild(x => x
                 .SetPath(".")
                 .SetFile("xc/commerce/Dockerfile")
-                .SetTag(XcFullImageName("commerce"))
+                .SetTag(XcImageName("commerce"))
                 .SetBuildArg(new string[] {
                     $"SQL_SA_PASSWORD={SQL_SA_PASSWORD}",
                     $"SQL_DB_PREFIX={SQL_DB_PREFIX}",
@@ -115,15 +125,16 @@ partial class Build : NukeBuild
         });
 
     Target XcMssqlIntermediate => _ => _
+        .Requires(() => File.Exists(Files / COMMERCE_SDK_PACKAGE))
         .DependsOn(XpMssql)
         .Executes(() =>
         {
-            var baseImage = XpFullImageName("mssql");
+            var baseImage = XpImageName("mssql");
 
             DockerBuild(x => x
                 .SetPath(".")
                 .SetFile("xc/mssql/Dockerfile")
-                .SetTag(XcFullImageName("mssql-intermediate"))
+                .SetTag(XcImageName("mssql-intermediate"))
                 .SetMemory(4000000000) // 4GB, SQL needs some more memory
                 .SetBuildArg(new string[] {
                     $"BASE_IMAGE={baseImage}",
@@ -134,15 +145,22 @@ partial class Build : NukeBuild
         });
 
     Target XcSitecoreIntermediate => _ => _
+        .Requires(() => File.Exists(Files / COMMERCE_CONNECT_PACKAGE))
+        .Requires(() => File.Exists(Files / COMMERCE_CONNECT_ENGINE_PACKAGE))
+        .Requires(() => File.Exists(Files / COMMERCE_SIF_PACKAGE))
+        .Requires(() => File.Exists(Files / COMMERCE_MA_PACKAGE))
+        .Requires(() => File.Exists(Files / COMMERCE_MA_FOR_AUTOMATION_ENGINE_PACKAGE))
+        .Requires(() => File.Exists(Files / COMMERCE_XPROFILES_PACKAGE))
+        .Requires(() => File.Exists(Files / COMMERCE_XANALYTICS_PACKAGE))
         .DependsOn(XpSitecore)
         .Executes(() =>
         {
-            var baseImage = XpFullImageName("sitecore");
+            var baseImage = XpImageName("sitecore");
 
             DockerBuild(x => x
                 .SetPath(".")
                 .SetFile("xc/sitecore/Dockerfile")
-                .SetTag(XcFullImageName("sitecore-intermediate"))
+                .SetTag(XcImageName("sitecore-intermediate"))
                 .SetBuildArg(new string[] {
                     $"BASE_IMAGE={baseImage}",
                     $"COMMERCE_CERT_PATH={COMMERCE_CERT_PATH}",
@@ -160,17 +178,18 @@ partial class Build : NukeBuild
         });
 
     Target XcSitecoreMssql => _ => _
+        .Requires(() => File.Exists(XcLicenseFile))
         .DependsOn(XcCommerce, XcMssqlIntermediate, XcSitecoreIntermediate, XcSolr, XcXconnect)
         .Executes(() => {
             System.IO.Directory.SetCurrentDirectory("xc");
 
-            Environment.SetEnvironmentVariable("IMAGE_PREFIX", $"{RepoImagePrefix}{XcImagePrefix}", EnvironmentVariableTarget.Process);
-            Environment.SetEnvironmentVariable("TAG", $"{XcVersion}", EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("IMAGE_PREFIX", $"{XcImagePrefix}", EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("TAG", $"{XcSitecoreVersion}", EnvironmentVariableTarget.Process);
 
             InstallSitecorePackage(
                 @"C:\Scripts\InstallCommercePackages.ps1", 
-                XcFullImageName("sitecore"), 
-                XcFullImageName("mssql"),
+                XcImageName("sitecore"), 
+                XcImageName("mssql"),
                 "-f docker-compose.yml"
             );
 
@@ -178,16 +197,17 @@ partial class Build : NukeBuild
         });
     
     Target XcSolr => _ => _
+        .Requires(() => File.Exists(Files / COMMERCE_SIF_PACKAGE))
         .DependsOn(BaseSolrBuilder, XpSolr)
         .Executes(() =>
         {
-            var baseImage = XpFullImageName("solr");
-            var builderBaseImage = BaseFullImageName("solr-builder");
+            var baseImage = XpImageName("solr");
+            var builderBaseImage = BaseImageName("solr-builder");
 
             DockerBuild(x => x
                 .SetPath(".")
                 .SetFile("xc/solr/Dockerfile")
-                .SetTag(XcFullImageName("solr"))
+                .SetTag(XcImageName("solr"))
                 .SetBuildArg(new string[] {
                     $"BASE_IMAGE={baseImage}",
                     $"BUILDER_BASE_IMAGE={builderBaseImage}",
@@ -198,15 +218,16 @@ partial class Build : NukeBuild
         });
 
     Target XcXconnect => _ => _
+        .Requires(() => File.Exists(Files / COMMERCE_MA_FOR_AUTOMATION_ENGINE_PACKAGE))
         .DependsOn(XpXconnect)
         .Executes(() =>
         {
-            var baseImage = XpFullImageName("xconnect");
+            var baseImage = XpImageName("xconnect");
 
             DockerBuild(x => x
                 .SetPath(".")
                 .SetFile("xc/xconnect/Dockerfile")
-                .SetTag(XcFullImageName("xconnect"))
+                .SetTag(XcImageName("xconnect"))
                 .SetBuildArg(new string[] {
                     $"BASE_IMAGE={baseImage}",
                     $"COMMERCE_MA_FOR_AUTOMATION_ENGINE_PACKAGE={COMMERCE_MA_FOR_AUTOMATION_ENGINE_PACKAGE}"
@@ -215,24 +236,23 @@ partial class Build : NukeBuild
         });
 
     Target XcSitecoreMssqlSxa => _ => _
+        .Requires(() => File.Exists(XcLicenseFile))
+        .Requires(() => File.Exists(Files / COMMERCE_SIF_PACKAGE))
         .DependsOn(XcSitecoreMssql, XcSolrSxa)
         .Executes(() => {
-            var sifPackageFile = $"./Files/{COMMERCE_SIF_PACKAGE}";
-            ControlFlow.Assert(File.Exists(sifPackageFile), "Cannot find {sifPackageFile}");
-            
             System.IO.Directory.SetCurrentDirectory("xc");
 
             // Set env variables for docker-compose
             Environment.SetEnvironmentVariable("PSE_PACKAGE", $"{PSE_PACKAGE}", EnvironmentVariableTarget.Process);
             Environment.SetEnvironmentVariable("SXA_PACKAGE", $"{SXA_PACKAGE}", EnvironmentVariableTarget.Process);
             Environment.SetEnvironmentVariable("SCXA_PACKAGE", $"{SCXA_PACKAGE}", EnvironmentVariableTarget.Process);
-            Environment.SetEnvironmentVariable("IMAGE_PREFIX", $"{RepoImagePrefix}{XcImagePrefix}", EnvironmentVariableTarget.Process);
-            Environment.SetEnvironmentVariable("TAG", $"{XcVersion}", EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("IMAGE_PREFIX", $"{XcImagePrefix}", EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("TAG", $"{XcSitecoreVersion}", EnvironmentVariableTarget.Process);
 
             InstallSitecorePackage(
                 @"C:\sxa\InstallSXA.ps1",
-                XcFullImageName("sitecore-sxa"), 
-                XcFullImageName("mssql-sxa"),
+                XcImageName("sitecore-sxa"), 
+                XcImageName("mssql-sxa"),
                 "-f docker-compose.yml -f docker-compose.sxa.yml"
             );
 
@@ -242,12 +262,12 @@ partial class Build : NukeBuild
     Target XcSolrSxa => _ => _
         .DependsOn(BaseSolrBuilder, XcSolr)
         .Executes(() => {
-            var baseImage = XcFullImageName("solr");
-            var builderBaseImage = BaseFullImageName("solr-builder");
+            var baseImage = XcImageName("solr");
+            var builderBaseImage = BaseImageName("solr-builder");
 
             DockerBuild(x => x
                 .SetPath("xc/solr/sxa")
-                .SetTag(XcFullImageName("solr-sxa"))
+                .SetTag(XcImageName("solr-sxa"))
                 .SetBuildArg(new string[] {
                     $"BASE_IMAGE={baseImage}",
                     $"BUILDER_BASE_IMAGE={builderBaseImage}"
@@ -255,25 +275,69 @@ partial class Build : NukeBuild
             );
         });
 
+   Target XcSitecoreMssqlJss => _ => _
+        .Requires(() => File.Exists(Files / COMMERCE_SIF_PACKAGE))
+        .DependsOn(XcSitecoreMssql)
+        .Executes(() => {
+            System.IO.Directory.SetCurrentDirectory("xc");
+
+            // Set env variables for docker-compose
+            Environment.SetEnvironmentVariable("JSS_PACKAGE", $"{JSS_PACKAGE}", EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("IMAGE_PREFIX", $"{XcImagePrefix}", EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("TAG", $"{XcSitecoreVersion}", EnvironmentVariableTarget.Process);
+
+            InstallSitecorePackage(
+                @"C:\jss\InstallJSS.ps1",
+                XcImageName("sitecore-jss"), 
+                XcImageName("mssql-jss"),
+                "-f docker-compose.yml -f docker-compose.jss.yml"
+            );
+
+            System.IO.Directory.SetCurrentDirectory("..");
+        });        
+
     Target Xc => _ => _
         .DependsOn(XcCommerce, XcSitecoreMssql, XcSolr, XcXconnect);
 
     Target XcSxa => _ => _
         .DependsOn(Xc, XcSitecoreMssqlSxa, XcSolrSxa);
 
+    Target XcJss => _ => _
+        .DependsOn(Xc, XcSitecoreMssqlJss);        
+
     Target PushXc => _ => _
+        .Requires(() => !string.IsNullOrEmpty(RepoImagePrefix))
         .Executes(() => {
-            DockerPush(x => x.SetName(XcFullImageName("commerce")));
-            DockerPush(x => x.SetName(XcFullImageName("mssql")));
-            DockerPush(x => x.SetName(XcFullImageName("sitecore")));
-            DockerPush(x => x.SetName(XcFullImageName("solr")));
-            DockerPush(x => x.SetName(XcFullImageName("xconnect")));
+            PushXcImage("commerce");
+            PushXcImage("mssql");
+            PushXcImage("sitecore");
+            PushXcImage("solr");
+            PushXcImage("xconnect");
         });
     
     Target PushXcSxa => _ => _
+        .Requires(() => !string.IsNullOrEmpty(RepoImagePrefix))
         .Executes(() => {
-            DockerPush(x => x.SetName(XcFullImageName("mssql-sxa")));
-            DockerPush(x => x.SetName(XcFullImageName("sitecore-sxa")));
-            DockerPush(x => x.SetName(XcFullImageName("solr-sxa")));
+            PushXcImage("mssql-sxa");
+            PushXcImage("sitecore-sxa");
+            PushXcImage("solr-sxa");
         });
+
+    Target PushXcJss => _ => _
+        .Requires(() => !string.IsNullOrEmpty(RepoImagePrefix))
+        .Executes(() => {
+            PushXcImage("mssql-jss");
+            PushXcImage("sitecore-jss");
+        });    
+
+    private void PushXcImage(string name)
+    {
+        var source = XcImageName(name);
+        var target = XcFullImageName(name);
+        DockerTasks.DockerImageTag(x => x
+        .SetSourceImage(source)
+        .SetTargetImage(target));
+
+        DockerTasks.DockerImagePush(x => x.SetName(target));
+    }
 }

@@ -12,12 +12,21 @@ using Nuke.Common.Tooling;
 
 partial class Build : NukeBuild
 {
+    /// <summary>
+    /// A build version that will be appended to the image name.
+    /// Ignored if its empty
+    /// </summary>
+    [Parameter("Docker image build version")]
+    public readonly string BuildVersion = "";
+
     public static int Main () => Execute<Build>(x => x.All);
 
     // Tools
     [PathExecutable(name: "docker-compose")] readonly Tool DockerCompose;
 
     [PathExecutable] readonly Tool Powershell;
+
+    private static readonly AbsolutePath Files = RootDirectory / "Files";
 
     // Docker options
     [Parameter("Docker image repository prefix, e.g. my.docker-image.repo/")]
@@ -30,7 +39,7 @@ partial class Build : NukeBuild
     }
 
     private void AssertCleanDirectory(string dir) {
-        if (System.IO.Directory.Exists(dir)) {
+        if (!System.IO.Directory.Exists(dir)) {
             System.IO.Directory.CreateDirectory(dir);
         } else {
             Nuke.Common.ControlFlow.Assert(
@@ -56,8 +65,6 @@ partial class Build : NukeBuild
                 .SetContainer(sitecoreContainerName)
                 .SetCommand("powershell")
                 .SetArgs(scriptFilename)
-                .SetInteractive(true)
-                .SetTty(true)
             );
 
             DockerCompose("stop");
@@ -73,8 +80,6 @@ partial class Build : NukeBuild
                 .SetContainer(mssqlContainerName)
                 .SetCommand("powershell")
                 .SetArgs(@"C:\Persist-Databases.ps1")
-                .SetInteractive(true)
-                .SetTty(true)
             );
 
             DockerCompose("stop");
@@ -96,8 +101,8 @@ partial class Build : NukeBuild
     }
 
     Target All => _ => _
-        .DependsOn(Xp, XpSxa, Xc, XcSxa);
+        .DependsOn(Xp, XpSxa, XpJss, Xc, XcSxa, XcJss);
 
     Target Push => _ => _
-        .DependsOn(PushXp, PushXpSxa, PushXc, PushXcSxa);
+        .DependsOn(PushXp, PushXpSxa, PushXpJss, PushXc, PushXcSxa, PushXcJss);
 }

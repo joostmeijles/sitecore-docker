@@ -1,4 +1,4 @@
-[![Build Status](https://dev.azure.com/joost0053/joost/_apis/build/status/joostmeijles.sitecore-docker)](https://dev.azure.com/joost0053/joost/_build/latest?definitionId=2)
+[![Build Status](https://dev.azure.com/avivasolutions-public/sitecore-docker/_apis/build/status/avivasolutionsnl.sitecore-docker?branchName=master)](https://dev.azure.com/avivasolutions-public/sitecore-docker/_build/latest?definitionId=1&branchName=master)
 
 Run Sitecore 9 XP0 and XC using Docker for Windows.
 
@@ -30,7 +30,7 @@ Put the `license.xml` in `xp/license/` for xp containers or in `xc/license/` for
 The XP0 Sitecore topology requires SSL between the services, for this we need self signed certificates for the 
 xConnect and SOLR roles. You can generate these by running the `./Generate-Certificates.ps1` script (note that this requires an Administrator elevated powershell environment and you may need to set the correct execution policy, e.g. `PS> powershell.exe -ExecutionPolicy Unrestricted`).
 
-> SXA is installed using Commerce SIF. Therefore building SXA images requires you have the Commerce SIF package availabled in the `Files` directory.
+> SXA and JSS are installed using Commerce SIF. Therefore building those images requires you have the Commerce SIF package availabled in the `Files` directory.
 
 ## Build
 Build all images using:
@@ -53,6 +53,9 @@ The build results in the following Docker images:
     - `sitecore-xp-sitecore-sxa`
     - `sitecore-xp-solr-sxa`
     - `sitecore-xp-mssql-sxa`
+- XP0 with JSS installed
+    - `sitecore-xp-sitecore-jss`
+    - `sitecore-xp-mssql-jss`
 
 - XC
     - `sitecore-xc-commerce`: ASP.NET
@@ -66,6 +69,9 @@ The build results in the following Docker images:
     - `sitecore-xc-sitecore-sxa`
     - `sitecore-xc-solr-sxa`
     - `sitecore-xc-mssql-sxa`
+- XC with JSS installed
+    - `sitecore-xc-sitecore-jss`
+    - `sitecore-xc-mssql-jss`
 
 All images are contain a version tag that corresponds to the Sitecore commercial version number e.g. `xp-sitecore-sitecore:9.0.2`.
 
@@ -80,11 +86,13 @@ Each Docker image (or set of images, e.g. `XP0` or `XC`) has a corresponding tar
 ### Push images
 To push the Docker images to your repository use the `push` build targets, e.g. to push all images:
 ```
-PS> nuke push
+PS> nuke Push --RepoImagePrefix <YourRepoNameHere>
 ```
 
-NB. To prefix the Docker images with your repository name change the `RepoImagePrefix`, `XpImagePrefix` and/or `XcImagePrefix` build setting parameters.
-
+The `BuildVersion` parameter may be used to optionally append a version to the image name:
+```
+PS> nuke Push --RepoImagePrefix <YourRepoNameHere> --BuildVersion <YourVersionHere>
+```
 
 # Run
 Docker compose is used to start up all required services. 
@@ -109,6 +117,11 @@ or to start Sitecore with SXA:
 PS> docker-compose -f docker-compose.yml -f docker-compose.sxa.yml up
 ```
 
+or to start Sitecore with JSS:
+```
+PS> docker-compose -f docker-compose.yml -f docker-compose.jss.yml up
+```
+
 Run-time parameters can be modified using the `.env` file:
 
 | Field                     | Description                                      |
@@ -123,7 +136,6 @@ NB. these run-time parameters should match the used build parameters.
 ## DNS
 To set the Docker container service names as DNS names on your host edit your `hosts` file. 
 A convenient tool to automatically do this is [whales-names](https://github.com/gregolsky/whales-names).
-
 
 # Known issues
 Docker for Windows can be unstable at times, some troubleshooting tips are listed below.
