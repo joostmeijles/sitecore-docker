@@ -82,6 +82,9 @@ partial class Build : NukeBuild
         {
             DockerCompose($"{dockerComposeOptions} up -d");
 
+            // Give time to complete attaching databases
+            Thread.Sleep(10000);
+
             // Install Commerce Connect package
             var sitecoreContainerName = GetContainerName("sitecore");
             DockerExec(x => x
