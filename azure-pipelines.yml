@@ -71,3 +71,8 @@ jobs:
           PushXp
           PushXc
           --RepoImagePrefix $(dockerId)
+
+  - powershell: Remove-PSDrive -Name Z
+    displayName: Unmount Files
+
+  # - script: docker system prune -f -a
