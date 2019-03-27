@@ -10,8 +10,3 @@ services:
     environment:
       JSS_PACKAGE: ${JSS_PACKAGE}
 
-  mssql:
-    image: "${IMAGE_PREFIX}mssql:${TAG}"
-
-  solr:
-    image: "${IMAGE_PREFIX}solr:${TAG}"
