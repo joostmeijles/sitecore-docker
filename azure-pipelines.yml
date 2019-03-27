@@ -9,8 +9,8 @@ trigger:
 jobs:
 - job: Build
   pool:
-    name: Docker
-    # vmImage: Windows-2019
+    # name: Docker
+    vmImage: Windows-2019
   # Use maximum timeout, ie. 6 hours 
   timeoutInMinutes: 0
 
@@ -57,7 +57,8 @@ jobs:
       targetType: 'filePath'
       filePath: build.ps1
       arguments: > 
-          All
+          XpSxa
+          XcSxa
 
   - script: docker login -u $(dockerId) -p $(dockerPwd) "$(dockerId).azurecr.io"
     displayName: Docker login
