@@ -82,8 +82,9 @@ partial class Build : NukeBuild
         {
             DockerCompose($"{dockerComposeOptions} up -d");
 
+            // TODO: wait for healthcheck?
             // Give time to complete attaching databases
-            Thread.Sleep(10000);
+            Thread.Sleep(15000);
 
             // Install Commerce Connect package
             var sitecoreContainerName = GetContainerName("sitecore");
@@ -99,7 +100,7 @@ partial class Build : NukeBuild
             DockerCompose($"{dockerComposeOptions} up -d mssql");
 
             // Give time to complete attaching databases
-            Thread.Sleep(10000);
+            Thread.Sleep(15000);
 
             var mssqlContainerName = GetContainerName("mssql");
             DockerExec(x => x
@@ -132,4 +133,6 @@ partial class Build : NukeBuild
     Target Push => _ => _
         .OnlyWhenDynamic(() => HasGitTag() || ForcePush)
         .DependsOn(PushXp, PushXpSxa, PushXpJss, PushXc, PushXcSxa, PushXcJss);
+
+    //TODO: clean
 }
