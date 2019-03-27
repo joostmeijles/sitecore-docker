@@ -57,7 +57,6 @@ jobs:
       targetType: 'filePath'
       filePath: build.ps1
       arguments: > 
-          XpSxa
           XcSxa
 
   - script: docker login -u $(dockerId) -p $(dockerPwd) "$(dockerId).azurecr.io"
